@@ -47,40 +47,33 @@ A `/dev/zramN` swap partition is allowed, and the stock SteamOS `/home/swapfile`
 
 ## Install
 
-### 1. Add the plugin
+Install [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader#-installation) first. In SteamOS Desktop Mode, open Konsole as the user who runs Steam. The script prompts for `sudo` when it needs to write system files.
+
+### Install the plugin and system hook together
+
+From a checkout or extracted **source archive** that includes `install.sh`, run this in the directory containing `plugin.json`:
 
 ```sh
-cd ~/homebrew/plugins
-git clone https://github.com/FlightDan/SteamOS-S2-S4-switcher Boiler-S2S4-Switcher
+bash install.sh
 ```
 
-Restart Decky. The entry shows up as **Boiler S2-S4 switcher**. Accept Decky's prompt to grant the plugin root, otherwise the panel can only report status.
-
-### 2. Activate the system hook
-
-The panel talks to the plugin, but the suspend override is a root-owned file in `/etc`. Copy the two scripts to a root-owned staging directory first — `install.py` refuses to work from a user-writable folder:
+If you downloaded the [Decky release ZIP](https://github.com/FlightDan/SteamOS-S2-S4-switcher/releases/latest), extract it and download [install.sh](install.sh) from this repository. Open Konsole in the extracted `Boiler-S2S4-Switcher` directory and provide that directory to the script:
 
 ```sh
-sudo mkdir -p /root/boiler-s2s4
-sudo cp "$HOME/homebrew/plugins/Boiler-S2S4-Switcher/install.py" \
-        "$HOME/homebrew/plugins/Boiler-S2S4-Switcher/sleep_control.py" /root/boiler-s2s4/
-sudo /usr/bin/python3 -I -B /root/boiler-s2s4/install.py activate
+bash ~/Downloads/install.sh install .
 ```
 
-That installs:
+The script places the plugin in the standard `~/homebrew/plugins` directory, activates the system hook in the current SteamOS slot, and restarts Decky. Keep the extracted files or checkout for reactivation and uninstall. In Game Mode, open **Boiler S2-S4 switcher** in Decky and turn on **Enable S4 sleep** when ready. The first enable writes the dedicated swap file and can take a while.
 
-- `/var/lib/boiler-sleep/sleep_control.py` — the copy systemd actually runs
-- `/etc/systemd/system/systemd-suspend.service.d/90-boiler-sleep.conf` — routes suspend through it
+### Activate the hook for a plugin already installed in Decky
 
-Then it runs `systemctl daemon-reload` and nothing else: no service restart, no sleep. If the reload fails it puts the old files back.
+If you installed the ZIP through Decky, run the script with the extracted files from the **same release**. This also works with a custom Decky plugin directory.
 
-Activation refuses to continue if it finds the legacy OXP3 Battery router, another suspend `ExecStart` override, or files it did not create. Remove that other integration first.
+```sh
+bash ~/Downloads/install.sh activate .
+```
 
-Do this **in each SteamOS A/B slot** you use. `/var/lib/boiler-sleep` lives on the root filesystem, so it is per-slot. A SteamOS update may reset `/etc` and require reactivation.
-
-### 3. Turn it on
-
-Open the panel, flip **Enable S4 sleep**, pick a delay, done. The first enable can take a while — it writes the whole swap file.
+Run `activate` in each SteamOS A/B slot where you use the plugin. The hook and its runtime live on that slot's root filesystem. After an update, run it again if the panel reports **System integration is not active**. The installer stops if it finds the legacy OXP3 Battery router, a conflicting suspend override, or changed installed files. If the plugin files were copied before activation failed, resolve the reported issue and rerun the same command.
 
 ## The panel
 
@@ -114,25 +107,23 @@ sudo /usr/bin/python3 -I -B /var/lib/boiler-sleep/sleep_control.py disable
 
 ## Uninstall
 
-Turn S4 off first. `remove` refuses while the swap state still exists, because deleting the hook does not delete the swap file.
+1. Turn off **Enable S4 sleep** and wait for cleanup to succeed. If the panel is unavailable, use the command in [Turn it off](#turn-it-off).
+2. In Konsole, open the directory containing `install.sh` and the plugin files of the version activated in this slot. Run:
 
-```sh
-sudo /usr/bin/python3 -I -B /root/boiler-s2s4/install.py remove
-```
+   ```sh
+   bash install.sh remove
+   ```
 
-Then delete the plugin folder and restart Decky:
+   If you downloaded the script separately, run `bash ~/Downloads/install.sh remove .` from the directory containing the matching extracted plugin files. For a manual installation that retained its original root-owned scripts, you can also run `sudo /usr/bin/python3 -I -B /root/boiler-s2s4/install.py remove`.
 
-```sh
-rm -rf "$HOME/homebrew/plugins/Boiler-S2S4-Switcher"
-```
-
-Order matters: the hook in `/etc` stays behind if you just delete the plugin folder, and the CLI above is the only supported way to remove it. Removing the hook from one A/B slot does not remove it from the other.
+   Removal stops if swap state still needs cleanup. On success, it restores normal suspend routing and keeps the saved delay preference. Repeat this step from each SteamOS A/B slot where you activated the hook.
+3. In Decky, open the menu for **Boiler S2-S4 switcher** and select **Uninstall**.
 
 ## Troubleshooting
 
 | What you see | What to do |
 | --- | --- |
-| *System integration is not active* | Run `activate` in this slot. A SteamOS update may have reset `/etc` |
+| *System integration is not active* | Run the [activation step](#activate-the-hook-for-a-plugin-already-installed-in-decky) in this slot |
 | *S4 cannot be enabled. …* | One of the requirement checks failed; the message names it |
 | *Enabling S4 sleep requires N MB…* | Free space on `/home`, then retry |
 | *Swap cleanup requires attention* | A previous turn-off did not finish. Press **Retry cleanup**, do not delete files by hand |
@@ -171,6 +162,7 @@ Passing tests mean the logic behaves as written. They do **not** prove that Deck
 | --- | --- |
 | `main.py` | Decky entry point; forwards panel calls to the installed runtime |
 | `sleep_control.py` | All state, swap, policy and suspend routing logic |
+| `install.sh` | Installs the Decky plugin and activates or removes the system hook |
 | `install.py` | Explicit root-only install/remove of the systemd hook |
 | `dist/index.js` | Panel UI and translations |
 | `plugin.json` | Decky manifest, including the required root flag |
