@@ -51,11 +51,13 @@ class RouterTests(unittest.TestCase):
         self.commands.append(args)
         return subprocess.CompletedProcess(args, 0, stdout=self.config)
 
-    def test_unsupported_saved_mode_passes_through(self):
+    def test_enabled_s4_with_unsupported_mode_fails_without_sleeping(self):
         self.write(sleep.POLICY, json.dumps({'mode':'hibernate','delay_minutes':120}))
+        self.write(sleep.STATE, json.dumps({'filesystem_uuid':'test-uuid','ino':1,'enabled':True,'phase':'ready'})).chmod(0o600)
         self.write('sys/power/disk', '[disabled]')
-        sleep.run()
-        self.assertEqual(self.commands[-1][-1], 'suspend')
+        with self.assertRaisesRegex(RuntimeError, 'S4 mode hibernate is unavailable'):
+            sleep.run()
+        self.assertFalse(any(Path(c[0]).name == 'systemd-sleep' for c in self.commands))
         self.assertFalse((self.root/sleep.RUNTIME).exists())
 
     def test_disabled_uses_stock_suspend(self):

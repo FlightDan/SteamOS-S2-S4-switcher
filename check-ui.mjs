@@ -35,7 +35,10 @@ function harness(language, initial, steamLanguage) {
       return state;
     }}; }}}});
   vm.runInContext(source, context);
-  assert.equal(context.plugin().titleView.children[0], 'Boiler S2/S4 switcher');
+  const plugin = context.plugin();
+  assert.equal(plugin.titleView.children[0], 'Boiler S2/S4 switcher');
+  assert.equal(plugin.icon.props['aria-hidden'],true);
+  assert.equal(Array.from(plugin.icon.children, child => typeof child === 'string' ? child : child.children[0]).join(''),'Zzz');
   const render = () => {index=0; tree=context.plugin().content.type();};
   const find = (key, node=tree) => {
     if (Array.isArray(node)) { for (const n of node) {const result=find(key,n); if (result) return result;} return; }
@@ -65,7 +68,15 @@ assert.equal(timer.find('deadline').props.label,'禁用 TSC deadline');
 assert.equal(timer.find('deadline').props.description,'Intel 设备可能需要开启本选项才能正常 S4 休眠。');
 await timer.find('deadline').props.onChange(true); timer.render();
 assert.equal(timer.find('deadline').props.checked,true);
-assert.equal(timer.find('deadline-restart').children[0],'重启后应用定时器设置。');
+assert.equal(timer.find('deadline-restart').type,'strong');
+assert.equal(timer.find('deadline-restart').props.role,'status');
+assert.equal(timer.find('deadline-restart').children[0],'必须重启后生效。');
+const afterRestart = harness('zh-CN', {...timerBase, enabled:true, tsc_deadline_disabled:true,
+  tsc_deadline_active:true, tsc_deadline_reboot_required:false}); await afterRestart.mount();
+assert.equal(afterRestart.find('deadline').props.checked,true);
+assert.equal(afterRestart.find('deadline-restart'),undefined);
+await afterRestart.find('deadline').props.onChange(false); afterRestart.render();
+assert.equal(afterRestart.find('deadline-restart').type,'strong');
 await timer.find('deadline').props.onChange(false); timer.render();
 assert.equal(timer.find('deadline-restart'),undefined);
 timer.fail();

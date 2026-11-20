@@ -69,14 +69,19 @@ class SwapTests(unittest.TestCase):
         self.assertTrue(file.exists()); self.assertFalse(self.active)
         sleep.set_enabled(False)
         self.assertFalse(file.exists()); self.assertFalse((self.root/sleep.STATE).exists())
+        sleep.set_enabled(True)
+        self.assertTrue(sleep.read_swap_state()['enabled'])
+        self.assertTrue(file.exists())
+        self.assertFalse(self.active)
 
     def test_pending_image_never_activated_or_deleted(self):
         sleep.set_enabled(True)
         file=self.root/sleep.SWAP_FILE
         with file.open('r+b') as stream: stream.seek(4096-10); stream.write(b'S1SUSPEND\x00')
-        self.commands.clear(); sleep.run()
-        self.assertEqual([Path(x[0]).name for x in self.commands], ['systemd-sleep'])
-        self.assertEqual(self.commands[0][-1], 'suspend')
+        self.commands.clear()
+        with self.assertRaisesRegex(RuntimeError, 'pending S4 image'):
+            sleep.run()
+        self.assertEqual(self.commands, [])
         with self.assertRaisesRegex(RuntimeError,'pending S4 image'): sleep.set_enabled(False)
         self.assertTrue(file.exists())
 
@@ -109,7 +114,7 @@ class SwapTests(unittest.TestCase):
         self.assertNotIn('swapoff', [Path(args[0]).name for args in self.commands])
         self.assertFalse((self.root/sleep.RUNTIME).exists())
 
-    def test_new_foreign_swap_after_activation_cleans_up_then_suspends(self):
+    def test_new_foreign_swap_after_activation_cleans_up_without_sleeping(self):
         sleep.set_enabled(True)
         def entries():
             result = [('/dev/zram0', 'partition')]
@@ -117,10 +122,12 @@ class SwapTests(unittest.TestCase):
                 result += [(str(self.root/sleep.SWAP_FILE), 'file'), ('/dev/sda2', 'partition')]
             return result
         self.commands.clear()
-        with patch.object(sleep, 'active_swaps', side_effect=entries): sleep.run()
-        self.assertEqual([Path(args[0]).name for args in self.commands], ['swapon','swapoff','systemd-sleep'])
-        self.assertEqual(self.commands[-1][-1], 'suspend')
+        with patch.object(sleep, 'active_swaps', side_effect=entries):
+            with self.assertRaises(RuntimeError):
+                sleep.run()
+        self.assertEqual([Path(args[0]).name for args in self.commands], ['swapon','swapoff'])
         self.assertFalse(self.active)
+        self.assertFalse((self.root/sleep.RUNTIME).exists())
 
     def test_pending_efi_marker_blocks_cleanup(self):
         sleep.set_enabled(True)
@@ -201,9 +208,11 @@ class StockSwapTests(unittest.TestCase):
                 raise subprocess.CalledProcessError(1, args)
             return original(args, **kwargs)
         with patch.object(sleep.subprocess, 'run', side_effect=fail):
-            sleep.run()
+            with self.assertRaises(subprocess.CalledProcessError):
+                sleep.run()
         self.assertTrue(self.stock); self.assertFalse(self.active)
-        self.assertEqual(self.commands[-1][-1], 'suspend')
+        self.assertFalse(any(Path(c[0]).name == 'systemd-sleep' for c in self.commands))
+        self.assertFalse((self.root/sleep.RUNTIME).exists())
 
     def test_pending_efi_keeps_owned_active_and_stock_off(self):
         original = sleep.subprocess.run
