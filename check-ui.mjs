@@ -8,7 +8,7 @@ assert.equal(deckyModule.pathname.split('/').length, 5);
 const source = fs.readFileSync(new URL('./dist/index.js', import.meta.url), 'utf8').replace(/export default\s*/, 'globalThis.plugin=');
 function harness(language, initial, steamLanguage) {
   const slots = [], effects = [], calls = [];
-  let index = 0, tree, state = {...initial}, failure = null, beforeSave, rejectAfterSave = false;
+  let index = 0, tree, state = {...initial}, failure = null, beforeSave, rejectAfterSave = false, availabilityOnEnable;
   const R = { createElement: (type, props, ...children) => ({type, props: props || {}, children}),
     useState: value => { const i = index++; if (!(i in slots)) slots[i] = value; return [slots[i], v => { slots[i] = v; }]; },
     useRef: value => { const i = index++; return slots[i] ??= {current: value}; },
@@ -18,6 +18,10 @@ function harness(language, initial, steamLanguage) {
     __DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit: {connect: (version, name) => { assert.equal(version, 2); assert.equal(name, metadata.name); return {callable: name => async (...args) => {
       if (name === 'get_sleep_status') return state;
       calls.push([name, ...args]);
+      if (name === 'set_enabled' && args[0] === true && availabilityOnEnable) {
+        state = {...state, ...availabilityOnEnable};
+        throw Error('S4 is unavailable on this system');
+      }
       if (name === 'set_sleep_policy' && beforeSave) await beforeSave();
       if (failure) throw Error(failure);
       if (name === 'set_enabled') state = {...state,enabled:args[0]};
@@ -39,6 +43,7 @@ function harness(language, initial, steamLanguage) {
   };
   return {calls, render, find, policy: () => [state.mode, state.delay_minutes],
     fail: (message = 'operation failed') => {failure = message;},
+    loseAvailabilityOnEnable: availability => {availabilityOnEnable = availability;},
     loseNextSaveResponse: () => {rejectAfterSave = true;},
     pauseNextSave() {
       let release;
@@ -48,7 +53,7 @@ function harness(language, initial, steamLanguage) {
     },
     async mount() {render(); effects.forEach(fn=>fn()); for (let i=0;i<5;i++) await Promise.resolve(); render();}};
 }
-const base = {enabled:false,mode:'auto',delay_minutes:120,router_installed:true,ready:true,available_modes:['system','s2idle','hibernate','auto'],reasons:{}};
+const base = {enabled:false,mode:'auto',delay_minutes:120,router_installed:true,ready:true,swap_state:'absent',available_modes:['system','s2idle','hibernate','auto'],reasons:{}};
 for (const language of ['en-US','zh-CN','zh-TW','ja','ko','de','fr','es']) {
   const ui=harness(language,base); await ui.mount();
   assert.equal(ui.find('switch').props.checked,false);
@@ -139,4 +144,31 @@ await noSpace.find('switch').props.onChange(true); noSpace.render();
 assert.equal(noSpace.find('error').children.join(''),'请先腾出空间创建 S4 交换文件，再重试。');
 const inactive=harness('en-US',{...base,router_installed:false}); await inactive.mount();
 assert.equal(inactive.find('switch').props.disabled,true);
-console.log('UI smoke passed: eight languages, swap copy, automatic persistence, rapid changes, failure recovery, legacy delay and capability gating.');
+const resumeBlocked = {available_modes:['system','s2idle'], reasons:{hibernate:['resume_configured'],auto:['resume_configured']}};
+for (const language of Object.keys(expectedLabels)) {
+  const unavailable = harness(language,{...base,...resumeBlocked}); await unavailable.mount();
+  assert.equal(unavailable.find('switch').props.disabled,true);
+  await unavailable.find('switch').props.onChange(true); unavailable.render();
+  assert.deepEqual(unavailable.calls,[]);
+  assert.equal(unavailable.find('error'),undefined);
+  const notice=unavailable.find('status').children.join('');
+  assert(!notice.includes('resume_configured'));
+  if (language === 'zh-CN') assert.equal(notice,'暂时无法开启 S4。内核仍保留休眠恢复位置。');
+  else if (language !== 'en-US') assert(!notice.includes('The kernel still has a hibernation resume target.'));
+}
+const lostAvailability = harness('zh-CN',base); await lostAvailability.mount();
+lostAvailability.loseAvailabilityOnEnable(resumeBlocked);
+await lostAvailability.find('switch').props.onChange(true); lostAvailability.render();
+assert.deepEqual(lostAvailability.calls,[['set_enabled',true]]);
+assert.equal(lostAvailability.find('switch').props.disabled,true);
+assert.equal(lostAvailability.find('error'),undefined);
+assert(lostAvailability.find('status').children.join('').includes('内核仍保留休眠恢复位置。'));
+const canDisable = harness('en-US',{...base,...resumeBlocked,enabled:true,swap_state:'ready'}); await canDisable.mount();
+assert.equal(canDisable.find('switch').props.disabled,false);
+await canDisable.find('switch').props.onChange(false);
+assert.deepEqual(canDisable.calls,[['set_enabled',false]]);
+const cleanup = harness('en-US',{...base,swap_state:'inspection-needed'}); await cleanup.mount();
+assert.equal(cleanup.find('switch').props.disabled,true);
+await cleanup.find('cleanup').props.onClick();
+assert.deepEqual(cleanup.calls,[['set_enabled',false]]);
+console.log('UI smoke passed: eight languages, automatic persistence, failure recovery, blocked enable, availability readback and cleanup.');
