@@ -1,6 +1,10 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
+const metadata = JSON.parse(fs.readFileSync(new URL('./plugin.json', import.meta.url), 'utf8'));
+assert.equal(metadata.name, 'Boiler S2-S4 switcher');
+const deckyModule = new URL(`/plugins/${metadata.name}/dist/index.js`, 'http://127.0.0.1:1337');
+assert.equal(deckyModule.pathname.split('/').length, 5);
 const source = fs.readFileSync(new URL('./dist/index.js', import.meta.url), 'utf8').replace(/export default\s*/, 'globalThis.plugin=');
 function harness(language, initial, steamLanguage) {
   const slots = [], effects = [], calls = [];
@@ -10,15 +14,16 @@ function harness(language, initial, steamLanguage) {
     useEffect: fn => effects.push(fn) };
   const context = vm.createContext({navigator: {language}, URLSearchParams, DFL: steamLanguage ? {findSP: () => ({location: {search: `?LANGUAGE=${steamLanguage}`}})} : undefined, window: {SP_REACT: R,
     DFL: {PanelSection:'section', PanelSectionRow:'row', ToggleField:'toggle', SliderField:'slider', ButtonItem:'button'},
-    __DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit: {connect: () => ({callable: name => async (...args) => {
+    __DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit: {connect: (version, name) => { assert.equal(version, 2); assert.equal(name, metadata.name); return {callable: name => async (...args) => {
       if (name === 'get_sleep_status') return state;
       calls.push([name, ...args]);
       if (fail) throw Error('operation failed');
       if (name === 'set_enabled') state = {...state,enabled:args[0]};
       else state = {...state,mode:args[0],delay_minutes:args[1]};
       return state;
-    }})}}});
+    }}; }}}});
   vm.runInContext(source, context);
+  assert.equal(context.plugin().titleView.children[0], 'Boiler S2/S4 switcher');
   const render = () => {index=0; tree=context.plugin().content.type();};
   const find = (key, node=tree) => {
     if (Array.isArray(node)) { for (const n of node) {const result=find(key,n); if (result) return result;} return; }

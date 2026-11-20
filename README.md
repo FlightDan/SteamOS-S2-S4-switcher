@@ -8,7 +8,7 @@ Initial support is limited to systemd 261, EFI with accessible efivars and a sep
 
 ## Install and activate
 
-Install this folder as a Decky plugin with folder name `Boiler-S2S4-Switcher`; the displayed name is `Boiler S2/S4 switcher`. Decky must grant the plugin its declared root flag. For the explicit system integration, use a root-owned, non-group-writable copy of `install.py` and `sleep_control.py` together (for example, copy them to a root-owned staging directory); then run:
+Install this folder as a Decky plugin with folder name `Boiler-S2S4-Switcher`; the plugin list entry is `Boiler S2-S4 switcher`. The panel displays `Boiler S2/S4 switcher`. Decky must grant the plugin its declared root flag. For the explicit system integration, use a root-owned, non-group-writable copy of `install.py` and `sleep_control.py` together (for example, copy them to a root-owned staging directory); then run:
 
 ```sh
 sudo /usr/bin/python3 -I -B /path/to/root-owned/staging/install.py activate
