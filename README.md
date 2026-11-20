@@ -51,26 +51,20 @@ Install [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader#-instal
 
 ### Install the plugin and system hook together
 
-From a checkout or extracted **source archive** that includes `install.sh`, run this in the directory containing `plugin.json`:
+Download the [`Boiler-S2S4-Switcher-<version>.zip` release asset](https://github.com/FlightDan/SteamOS-S2-S4-switcher/releases/latest) and extract it. In Konsole, open the extracted `Boiler-S2S4-Switcher` folder and run:
 
 ```sh
 bash install.sh
 ```
 
-If you downloaded the [Decky release ZIP](https://github.com/FlightDan/SteamOS-S2-S4-switcher/releases/latest), extract it and download [install.sh](install.sh) from this repository. Open Konsole in the extracted `Boiler-S2S4-Switcher` directory and provide that directory to the script:
-
-```sh
-bash ~/Downloads/install.sh install .
-```
-
-The script places the plugin in the standard `~/homebrew/plugins` directory, activates the system hook in the current SteamOS slot, and restarts Decky. Keep the extracted files or checkout for reactivation and uninstall. In Game Mode, open **Boiler S2-S4 switcher** in Decky and turn on **Enable S4 sleep** when ready. The first enable writes the dedicated swap file and can take a while.
+The script places the plugin in the standard `~/homebrew/plugins` directory, activates the system hook in the current SteamOS slot, and restarts Decky. Keep the extracted files for reactivation and uninstall. In Game Mode, open **Boiler S2-S4 switcher** in Decky and turn on **Enable S4 sleep** when ready. The first enable writes the dedicated swap file and can take a while.
 
 ### Activate the hook for a plugin already installed in Decky
 
-If you installed the ZIP through Decky, run the script with the extracted files from the **same release**. This also works with a custom Decky plugin directory.
+For an existing installation, use Decky's local ZIP installer to install the new version. Then open the extracted folder from the same ZIP and run the command below. This also works with a custom Decky plugin directory.
 
 ```sh
-bash ~/Downloads/install.sh activate .
+bash install.sh activate
 ```
 
 Run `activate` in each SteamOS A/B slot where you use the plugin. The hook and its runtime live on that slot's root filesystem. After an update, run it again if the panel reports **System integration is not active**. The installer stops if it finds the legacy OXP3 Battery router, a conflicting suspend override, or changed installed files. If the plugin files were copied before activation failed, resolve the reported issue and rerun the same command.
@@ -114,7 +108,7 @@ sudo /usr/bin/python3 -I -B /var/lib/boiler-sleep/sleep_control.py disable
    bash install.sh remove
    ```
 
-   If you downloaded the script separately, run `bash ~/Downloads/install.sh remove .` from the directory containing the matching extracted plugin files. For a manual installation that retained its original root-owned scripts, you can also run `sudo /usr/bin/python3 -I -B /root/boiler-s2s4/install.py remove`.
+   For an older manual installation that retained its original root-owned scripts, you can also run `sudo /usr/bin/python3 -I -B /root/boiler-s2s4/install.py remove`.
 
    Removal stops if swap state still needs cleanup. On success, it restores normal suspend routing and keeps the saved delay preference. Repeat this step from each SteamOS A/B slot where you activated the hook.
 3. In Decky, open the menu for **Boiler S2-S4 switcher** and select **Uninstall**.
