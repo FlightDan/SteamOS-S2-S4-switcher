@@ -60,7 +60,7 @@ install_decky_files() {
         return
     fi
 
-    plugin_stage=$(sudo mktemp -d -- "$HOME/homebrew/.boiler-s2s4.XXXXXX")
+    plugin_stage=$(sudo mktemp -d -- /home/.boiler-s2s4.XXXXXX)
     sudo install -d -m 0755 -- "$plugin_stage/dist"
     for file in "${plugin_files[@]}"; do
         sudo install -T -m 0644 -- /dev/stdin "$plugin_stage/$file" < "$source_dir/$file"
