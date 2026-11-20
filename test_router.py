@@ -96,6 +96,29 @@ class RouterTests(unittest.TestCase):
         self.write('proc/swaps', 'Filename Type Size Used Priority\n/dev/zram0 partition 100 0 100\n')
         self.assertIn('hibernate', sleep.capabilities()[0])
 
+    def test_stock_recognition_requires_exact_unit_and_package(self):
+        self.write('etc/os-release', 'ID=steamos\n')
+        props = ('FragmentPath=/usr/lib/systemd/system/home-swapfile.swap\n'
+                 'What=/home/swapfile\nOptions=\nDropInPaths=\n')
+        home = types.SimpleNamespace(st_mode=0o040755, st_uid=0, st_dev=5)
+        stock = types.SimpleNamespace(st_mode=0o100600, st_uid=0, st_dev=5, st_nlink=1, st_ino=42)
+        def lstat(target):
+            return home if target == self.root/'home' else stock
+        package = 'steamos-customizations-jupiter\n'
+        def result(args, **kwargs):
+            output = props if Path(args[0]).name == 'systemctl' else package
+            return subprocess.CompletedProcess(args, 0, stdout=output)
+        with patch.object(Path, 'lstat', lstat), patch.object(sleep, 'swap_signature'), \
+             patch.object(sleep.subprocess, 'run', side_effect=result):
+            self.assertEqual(sleep.stock_swap_identity(), (5, 42))
+            package = 'another-swap-package\n'
+            with self.assertRaisesRegex(RuntimeError, 'ownership'): sleep.stock_swap_identity()
+            package = 'steamos-customizations-jupiter\n'
+            props = props.replace('Options=\n', 'Options=pri=3\n')
+            with self.assertRaisesRegex(RuntimeError, 'modified'): sleep.stock_swap_identity()
+            props = props.replace('Options=pri=3\n', 'Options=\n').replace('DropInPaths=\n', 'DropInPaths=/tmp/override\n')
+            with self.assertRaisesRegex(RuntimeError, 'modified'): sleep.stock_swap_identity()
+
     def test_version_and_mount_parsers(self):
         for version, supported in [('systemd 261 (261.1)\n', True), ('systemd 261.2\n', True),
                                    ('systemd 260\n', False), ('systemd 2610\n', False), ('bad', False)]:
