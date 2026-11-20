@@ -128,6 +128,14 @@ def change_locked(action):
             raise RuntimeError('Disable S4 and clean its owned swap before removing integration')
         if have_runtime != have_router:
             raise RuntimeError('Incomplete integration; inspect files before proceeding')
+        if os.path.lexists(target('home/.boiler-s2s4/deadline-efi.json')):
+            # SOURCE is already verified above. The caller holds the shared lock.
+            import importlib.util
+            spec = importlib.util.spec_from_file_location('boiler_sleep_cleanup', SOURCE)
+            sleep = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(sleep)
+            sleep.ROOT = ROOT
+            sleep.deadline_remove()
         if not have_runtime:
             return 'Already removed; preference retained'
         removed = []

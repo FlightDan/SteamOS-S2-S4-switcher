@@ -25,6 +25,8 @@ function harness(language, initial, steamLanguage) {
       if (name === 'set_sleep_policy' && beforeSave) await beforeSave();
       if (failure) throw Error(failure);
       if (name === 'set_enabled') state = {...state,enabled:args[0]};
+      else if (name === 'set_tsc_deadline_disabled') state = {...state,
+        tsc_deadline_disabled:args[0], tsc_deadline_reboot_required:args[0] !== state.tsc_deadline_active};
       else state = {...state,mode:args[0],delay_minutes:args[1]};
       if (name === 'set_sleep_policy' && rejectAfterSave) {
         rejectAfterSave = false;
@@ -54,6 +56,27 @@ function harness(language, initial, steamLanguage) {
     async mount() {render(); effects.forEach(fn=>fn()); for (let i=0;i<5;i++) await Promise.resolve(); render();}};
 }
 const base = {enabled:false,mode:'auto',delay_minutes:120,router_installed:true,ready:true,swap_state:'absent',available_modes:['system','s2idle','hibernate','auto'],reasons:{}};
+const timerBase = {...base,tsc_deadline_available:true,tsc_deadline_active:false,tsc_deadline_disabled:false};
+const timer = harness('zh-CN',timerBase); await timer.mount();
+assert.equal(timer.find('deadline'),undefined);
+await timer.find('switch').props.onChange(true); timer.render();
+assert.equal(timer.find('deadline').props.checked,false);
+assert.equal(timer.find('deadline').props.label,'禁用 TSC deadline');
+assert.equal(timer.find('deadline').props.description,'Intel 设备可能需要开启本选项才能正常 S4 休眠。');
+await timer.find('deadline').props.onChange(true); timer.render();
+assert.equal(timer.find('deadline').props.checked,true);
+assert.equal(timer.find('deadline-restart').children[0],'重启后应用定时器设置。');
+await timer.find('deadline').props.onChange(false); timer.render();
+assert.equal(timer.find('deadline-restart'),undefined);
+timer.fail();
+await timer.find('deadline').props.onChange(true); timer.render();
+assert.equal(timer.find('deadline').props.checked,false);
+assert(timer.find('error'));
+const managed = harness('en-US',{...timerBase,enabled:true,tsc_deadline_disabled:true,
+  tsc_deadline_external:true,tsc_deadline_available:false}); await managed.mount();
+assert.equal(managed.find('deadline').props.checked,true);
+assert.equal(managed.find('deadline').props.disabled,true);
+assert(managed.find('deadline').props.description.includes('Managed by'));
 for (const language of ['en-US','zh-CN','zh-TW','ja','ko','de','fr','es']) {
   const ui=harness(language,base); await ui.mount();
   assert.equal(ui.find('switch').props.checked,false);
